@@ -29,15 +29,9 @@ export default class TabLimitPlugin extends Plugin {
     enforceTabLimit() {
         const openTabs = this.app.workspace.getLeavesOfType("markdown")
 
-
-        console.log(openTabs)
-        // Empty string to get all leaves
-
         if (openTabs.length > this.settings.globalTabLimit) {
-            // Close the latest opened tab to enforce the limit
             openTabs[openTabs.length - 1].detach();
 
-            // Notify the user
             new Notice("Tab limit reached. Unable to open more tabs.");
         }
     }
@@ -66,10 +60,8 @@ class TabLimitSettingTab extends PluginSettingTab {
 
         containerEl.empty();
 
-        containerEl.createEl("h2", { text: "Tab Limit Settings" });
-
         new Setting(containerEl)
-            .setName("Global Maximum Tab Limit")
+            .setName("Global maximum tab limit")
             .setDesc("Set the maximum number of tabs you can open across all windows.")
             .addSlider(slider => {
                 const valueLabel = containerEl.createEl("span", { text: `${this.plugin.settings.globalTabLimit}` });
