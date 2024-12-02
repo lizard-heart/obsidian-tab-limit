@@ -1,7 +1,7 @@
 {
 	"id": "tab-limit",
 	"name": "Tab Limiter",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Limits the number of tabs that can be opened.",
 	"author": "Henry Gustafson",
