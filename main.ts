@@ -1,5 +1,5 @@
 // Import necessary Obsidian modules
-import { Plugin, PluginSettingTab, Setting, Notice, App, WorkspaceLeaf, MarkdownView } from "obsidian";
+import { Plugin, PluginSettingTab, Setting, App, WorkspaceLeaf } from "obsidian";
 
 // Define plugin settings
 interface TabLimitSettings {
@@ -12,6 +12,8 @@ const DEFAULT_SETTINGS: TabLimitSettings = {
 
 export default class TabLimitPlugin extends Plugin {
     settings: TabLimitSettings;
+    private tabAccessOrder = new Map<WorkspaceLeaf, number>();
+    private accessCounter = 0;
 
     async onload() {
         // Load settings
@@ -20,20 +22,86 @@ export default class TabLimitPlugin extends Plugin {
         // Add setting tab for configuration
         this.addSettingTab(new TabLimitSettingTab(this.app, this));
 
-        // Hook into the workspace to intercept tab openings
+        this.app.workspace.onLayoutReady(() => {
+            this.syncTrackedTabs();
+            this.markLeafAsUsed(this.app.workspace.activeLeaf);
+            this.enforceTabLimit();
+        });
+
+        this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+            this.markLeafAsUsed(leaf);
+            this.enforceTabLimit();
+        }));
+
+        // Hook into the workspace to enforce the tab limit after layout changes
         this.registerEvent(this.app.workspace.on("layout-change", () => {
+            this.syncTrackedTabs();
             this.enforceTabLimit();
         }));
     }
 
     enforceTabLimit() {
-        const openTabs = this.app.workspace.getLeavesOfType("markdown")
+        const openTabs = this.syncTrackedTabs();
+        const tabLimit = Math.max(1, this.settings.globalTabLimit);
 
-        if (openTabs.length > this.settings.globalTabLimit) {
-            openTabs[openTabs.length - 1].detach();
+        while (openTabs.length > tabLimit) {
+            const oldestTab = this.getOldestTab(openTabs);
 
-            new Notice("Tab limit reached. Unable to open more tabs.");
+            if (!oldestTab) {
+                break;
+            }
+
+            oldestTab.detach();
+            this.tabAccessOrder.delete(oldestTab);
+
+            const oldestTabIndex = openTabs.indexOf(oldestTab);
+            if (oldestTabIndex !== -1) {
+                openTabs.splice(oldestTabIndex, 1);
+            }
         }
+    }
+
+    private syncTrackedTabs(): WorkspaceLeaf[] {
+        const openTabs = this.app.workspace.getLeavesOfType("markdown");
+        const openTabSet = new Set(openTabs);
+
+        for (const trackedTab of this.tabAccessOrder.keys()) {
+            if (!openTabSet.has(trackedTab)) {
+                this.tabAccessOrder.delete(trackedTab);
+            }
+        }
+
+        for (const tab of openTabs) {
+            if (!this.tabAccessOrder.has(tab)) {
+                this.markLeafAsUsed(tab);
+            }
+        }
+
+        return openTabs;
+    }
+
+    private markLeafAsUsed(leaf: WorkspaceLeaf | null) {
+        if (!leaf || leaf.view.getViewType() !== "markdown") {
+            return;
+        }
+
+        this.tabAccessOrder.set(leaf, ++this.accessCounter);
+    }
+
+    private getOldestTab(openTabs: WorkspaceLeaf[]): WorkspaceLeaf | null {
+        let oldestTab: WorkspaceLeaf | null = null;
+        let oldestAccessOrder = Number.POSITIVE_INFINITY;
+
+        for (const tab of openTabs) {
+            const accessOrder = this.tabAccessOrder.get(tab) ?? 0;
+
+            if (accessOrder < oldestAccessOrder) {
+                oldestAccessOrder = accessOrder;
+                oldestTab = tab;
+            }
+        }
+
+        return oldestTab;
     }
 
 
